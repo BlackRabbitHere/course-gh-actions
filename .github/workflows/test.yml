@@ -8,7 +8,8 @@ on:
   # push:
   # schedule:
     # - cron: "*/5 * * * *"
-  workflow_dispatch: #manusl e
+  workflow_dispatch:
+     #manusl e
 
   # Allows you to run this workflow manually from the Actions tab
  
