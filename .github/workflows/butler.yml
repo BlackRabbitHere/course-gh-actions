@@ -1,4 +1,4 @@
-name: Gemini Review
+name: Gemini PR Review
 
 on:
   issue_comment:
@@ -6,40 +6,141 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
   issues: write
+  pull-requests: write
 
 jobs:
   review:
-    # Only run when comment contains /gemini-review
-    # and the comment belongs to a Pull Request
     if: >
-      contains(github.event.comment.body, '/gemini-review') &&
-      github.event.issue.pull_request
+      github.event.issue.pull_request &&
+      github.event.comment.body == '/gemini-review'
 
     runs-on: ubuntu-latest
 
     steps:
+
+      # ---------------------------------------------------------
+      # 1. Checkout repository
+      # ---------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Run Gemini review
-        uses: google-github-actions/run-gemini-cli@v0
+
+      # ---------------------------------------------------------
+      # 2. Make sure Gemini secret actually exists
+      # ---------------------------------------------------------
+      - name: Check Gemini API key
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::error::GEMINI_API_KEY secret is not configured"
+            exit 1
+          fi
+
+          echo "Gemini API key is configured."
+
+
+      # ---------------------------------------------------------
+      # 3. Get the PR diff
+      # ---------------------------------------------------------
+      - name: Get Pull Request diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+
+        run: |
+          gh pr diff "$PR_NUMBER" > pr.diff
+
+          echo "Pull Request #$PR_NUMBER diff downloaded."
+
+
+      # ---------------------------------------------------------
+      # 4. Gemini review
+      # ---------------------------------------------------------
+      - name: Run Gemini CLI
+        id: gemini
+
+        uses: google-github-actions/run-gemini-cli@v0
+
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+
         with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+
           prompt: |
-            Review pull request #${{ github.event.issue.number }}.
+            You are an experienced software engineer performing
+            a Pull Request review.
+
+            Read the file:
+
+            pr.diff
+
+            Review the code changes carefully.
 
             Focus on:
-            - bugs and correctness
-            - security vulnerabilities
-            - performance problems
-            - maintainability
-            - code quality
-            - edge cases
 
-            Provide concise and constructive review feedback.
+            1. Bugs and correctness
+            2. Security vulnerabilities
+            3. Performance problems
+            4. Edge cases
+            5. Error handling
+            6. Maintainability
+            7. Code quality
+            8. Possible improvements
+
+            Do not complain about code that is already correct.
+
+            Provide constructive review feedback.
+
+            Structure the response as:
+
+            ## Gemini Code Review
+
+            ### Critical Issues
+            ...
+
+            ### Improvements
+            ...
+
+            ### Good Practices
+            ...
+
+            ### Overall Assessment
+            ...
+
+
+      # ---------------------------------------------------------
+      # 5. Post Gemini's answer onto the Pull Request
+      # ---------------------------------------------------------
+      - name: Post Gemini review
+        uses: actions/github-script@v9
+
+        env:
+          GEMINI_REVIEW: ${{ steps.gemini.outputs.summary }}
+
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+          script: |
+            const review = process.env.GEMINI_REVIEW;
+
+            if (!review) {
+              core.setFailed("Gemini returned an empty review.");
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: review
+            });
