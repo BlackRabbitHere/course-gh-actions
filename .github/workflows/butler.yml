@@ -1,0 +1,45 @@
+name: Gemini Review
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    # Only run when comment contains /gemini-review
+    # and the comment belongs to a Pull Request
+    if: >
+      contains(github.event.comment.body, '/gemini-review') &&
+      github.event.issue.pull_request
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gemini review
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          prompt: |
+            Review pull request #${{ github.event.issue.number }}.
+
+            Focus on:
+            - bugs and correctness
+            - security vulnerabilities
+            - performance problems
+            - maintainability
+            - code quality
+            - edge cases
+
+            Provide concise and constructive review feedback.
