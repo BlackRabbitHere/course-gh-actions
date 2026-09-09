@@ -1,0 +1,60 @@
+name: upper-cross
+
+on:
+  push:
+    paths:
+      - ".github/workflows/upper-cross.yml"
+      - "upper/**"
+
+    tags:
+      - "v*"
+
+  workflow_dispatch:
+
+jobs:
+  cross:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    defaults:
+      run:
+        working-directory: upper
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache-dependency-path: ./upper/go.sum
+
+      - name: Show Go version
+        run: go version
+
+      - name: Make build script executable
+        run: chmod +x build.xplat.sh
+
+      - name: Build cross-platform binaries
+        run: ./build.xplat.sh
+
+      - name: Show generated binaries
+        run: ls -lah ./bin
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: upper-cross-platform-binaries
+          path: ./upper/bin/upper*
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./upper/bin/upper*
+          body: "Binaries for the upper (Go) command line tool!"
+          tag_name: ${{ github.ref_name }}
