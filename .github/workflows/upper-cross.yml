@@ -45,7 +45,7 @@ jobs:
         run: ls -lah ./bin
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v04
         with:
           name: upper-cross-platform-binaries
           path: ./upper/bin/upper*
@@ -55,6 +55,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ./upper/123bin/upper*
+          files: ./upper/bin/upper*
           body: "Binaries for the upper (Go) command line tool!"
           tag_name: ${{ github.ref_name }}
